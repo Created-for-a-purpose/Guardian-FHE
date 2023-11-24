@@ -17,46 +17,70 @@ struct FheParam {
 
 use std::env;
 
-fn main() {
-    env::set_var("RISC0_DEV_MODE", "1");
-    
-    let parameters = BfvParametersBuilder::new()
-      .set_degree(2048)
-      .set_moduli(&[0x3fffffff000001])
-      .set_plaintext_modulus(1 << 10)
-      .build_arc().unwrap();
-    let mut rng = thread_rng();
+#[macro_use] extern crate rocket;
 
-    let secret_key = SecretKey::random(&parameters, &mut OsRng);
-    let public_key = PublicKey::new(&secret_key, &mut rng);
+#[get("/")]
+fn index() -> Vec<u8> {
+  let parameters = BfvParametersBuilder::new()
+        .set_degree(2048)
+        .set_moduli(&[0x3fffffff000001])
+        .set_plaintext_modulus(1 << 10)
+        .build_arc().unwrap();
+      let mut rng = thread_rng();
+  
+      let secret_key = SecretKey::random(&parameters, &mut OsRng);
+      let public_key = PublicKey::new(&secret_key, &mut rng);
 
-    let plaintext_1 = Plaintext::try_encode(&[20_u64], Encoding::poly(), &parameters).unwrap();
-    let plaintext_2 = Plaintext::try_encode(&[7_u64], Encoding::poly(), &parameters).unwrap();
-
-    let ciphertext_1: Ciphertext = secret_key.try_encrypt(&plaintext_1, &mut rng).unwrap();
-    let ciphertext_2: Ciphertext = public_key.try_encrypt(&plaintext_2, &mut rng).unwrap();
-
-    let fhe_params = FheParam { ciphtxt1: ciphertext_1.to_bytes(), ciphtxt2: ciphertext_2.to_bytes() };
-
-    let env = ExecutorEnv::builder()
-      .write_slice(&bincode::serialize(&fhe_params).unwrap())
-      .build().unwrap();
-
-    // Obtain the default prover.
-    let prover = default_prover();
-
-    // Produce a receipt by proving the specified ELF binary.
-    let receipt = prover.prove_elf(env, FHE_GUEST_ELF).unwrap();
-
-    // Deserialize resulting ciphertext
-    let result: Vec<u8> = receipt.journal.decode().unwrap();
-    let ciph_out: Ciphertext = Ciphertext::from_bytes(&result, &parameters).unwrap();
-
-    receipt.verify(FHE_GUEST_ID).unwrap();
-
-    let decrypted_plaintext = secret_key.try_decrypt(&ciph_out).unwrap();
-    let decrypted_vector = Vec::<i64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
-
-    // Verify the result was correct
-    assert_eq!(decrypted_vector[0], 27);
+      let serialized = serde_json::to_vec(&public_key.to_bytes()).unwrap();
+      serialized
 }
+
+#[launch]
+fn rocket() -> _ {
+  env::set_var("RISC0_DEV_MODE", "1");
+    rocket::build().mount("/", routes![index])
+}
+
+// fn main() {
+//     env::set_var("RISC0_DEV_MODE", "1");
+
+//     let parameters = BfvParametersBuilder::new()
+//       .set_degree(2048)
+//       .set_moduli(&[0x3fffffff000001])
+//       .set_plaintext_modulus(1 << 10)
+//       .build_arc().unwrap();
+//     let mut rng = thread_rng();
+
+//     let secret_key = SecretKey::random(&parameters, &mut OsRng);
+//     let public_key = PublicKey::new(&secret_key, &mut rng);
+
+//     let plaintext_1 = Plaintext::try_encode(&[20_u64], Encoding::poly(), &parameters).unwrap();
+//     let plaintext_2 = Plaintext::try_encode(&[7_u64], Encoding::poly(), &parameters).unwrap();
+
+//     let ciphertext_1: Ciphertext = secret_key.try_encrypt(&plaintext_1, &mut rng).unwrap();
+//     let ciphertext_2: Ciphertext = public_key.try_encrypt(&plaintext_2, &mut rng).unwrap();
+
+//     let fhe_params = FheParam { ciphtxt1: ciphertext_1.to_bytes(), ciphtxt2: ciphertext_2.to_bytes() };
+
+//     let env = ExecutorEnv::builder()
+//       .write_slice(&bincode::serialize(&fhe_params).unwrap())
+//       .build().unwrap();
+
+//     // Obtain the default prover.
+//     let prover = default_prover();
+
+//     // Produce a receipt by proving the specified ELF binary.
+//     let receipt = prover.prove_elf(env, FHE_GUEST_ELF).unwrap();
+
+//     // Deserialize resulting ciphertext
+//     let result: Vec<u8> = receipt.journal.decode().unwrap();
+//     let ciph_out: Ciphertext = Ciphertext::from_bytes(&result, &parameters).unwrap();
+
+//     receipt.verify(FHE_GUEST_ID).unwrap();
+
+//     let decrypted_plaintext = secret_key.try_decrypt(&ciph_out).unwrap();
+//     let decrypted_vector = Vec::<i64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
+
+//     // Verify the result was correct
+//     assert_eq!(decrypted_vector[0], 27);
+// }

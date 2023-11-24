@@ -8,7 +8,9 @@ methods = { path = "../methods" }
 risc0-zkvm = { version = "0.19.1" }
 env_logger = "0.10"
 serde = "1.0"
+serde_json = "*"
 fhe = { path = "../lib/fhe-rs/crates/fhe" }
 fhe-traits = { path = "../lib/fhe-rs/crates/fhe-traits" }
 bincode = "*"
 rand = "0.8.5"
+rocket = "0.5.0"
