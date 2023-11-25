@@ -27,47 +27,62 @@ struct KeyPair{
 }
 
 #[macro_use] extern crate rocket;
+use rocket::serde::json::Json;
 
 #[get("/generateKeyPair")]
-fn generateKeyPair() -> Vec<u8> {
+fn generateKeyPair() -> String {
   let parameters = BfvParameters::default_arc(1, 8);
   let mut rng = thread_rng();
  
   let secret_key = SecretKey::random(&parameters, &mut OsRng);
   let public_key = PublicKey::new(&secret_key, &mut rng);
 
+  /*@dev Write to local files
   let mut file = File::create("pkey.json").unwrap();
   let serialized_pk = serde_json::to_vec(&public_key.to_bytes()).unwrap();
   file.write(&serialized_pk);
 
   file = File::create("skey.json").unwrap();
   let serialized_sk = serde_json::to_vec(&secret_key.to_bytes()).unwrap();
-  file.write(&serialized_sk);
+  file.write(&serialized_sk); */
 
   let key_pair = KeyPair { sk: secret_key.to_bytes(), pk: public_key.to_bytes() };
-  bincode::serialize(&key_pair).unwrap()
+  let serialized_key_pair = serde_json::to_string(&key_pair).unwrap();
+  serialized_key_pair
 }
 
-#[get("/encrypt")]
-fn encrypt() -> Vec<u8> {
+#[derive(rocket::serde::Serialize, rocket::serde::Deserialize)]
+#[serde(crate = "rocket::serde")]
+struct EncryptionWrapper {
+  key: Vec<u8>,
+  plaintext: u64
+}
+
+#[post("/encrypt", format="json", data="<public_key>")]
+fn encrypt(public_key: Json<EncryptionWrapper>) -> Vec<u8> {
+  let pkey = &public_key.key;
+  let plaintext = public_key.plaintext;
+
   let parameters = BfvParameters::default_arc(1, 8);
   let mut rng = thread_rng();
 
+  /*@dev Read from a local file
   let mut file = File::open("pkey.json").unwrap();
   let mut ser_pk = String::new();
   file.read_to_string(&mut ser_pk).unwrap();
-  let pkey: Vec<u8>= serde_json::from_str(&ser_pk).unwrap();
+  let pkey: Vec<u8>= serde_json::from_str(&ser_pk).unwrap();*/
   
   let public_key = PublicKey::from_bytes(&pkey, &parameters).unwrap();
 
-  let plaintext_1 = Plaintext::try_encode(&[20_u64], Encoding::poly(), &parameters).unwrap();
-  let ciphertext_1 = PublicKey::try_encrypt(&public_key, &plaintext_1, &mut rng).unwrap();
+  let plaintext_encoded = Plaintext::try_encode(&[plaintext], Encoding::poly(), &parameters).unwrap();
+  let ciphertext = PublicKey::try_encrypt(&public_key, &plaintext_encoded, &mut rng).unwrap();
 
-//   let mut file = File::create("cipher.json").unwrap();
-// let serialized_c = serde_json::to_vec(&ciphertext_1.to_bytes()).unwrap();
-// file.write(&serialized_c);
+  /*@dev Write to a local file
+  let mut file = File::create("cipher.json").unwrap();
+  file.write(&serialized_cipher); */
 
-    bincode::serialize(&ciphertext_1.to_bytes()).unwrap()
+  let serialized_cipher = serde_json::to_vec(&ciphertext.to_bytes()).unwrap();
+  serialized_cipher
 }
 
 #[get("/decrypt")]
@@ -91,7 +106,9 @@ fn decrypt() -> Vec<u8>{
 
     // Verify the result was correct
     println!("decrypted_vector[0] {}", decrypted_vector[0]);
-    bincode::serialize(&decrypted_vector).unwrap()
+    // bincode::serialize(&decrypted_vector).unwrap()
+    let serialized_r = serde_json::to_vec(&decrypted_vector).unwrap();
+    serialized_r
 }
 
 #[launch]

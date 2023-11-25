@@ -13,4 +13,4 @@ fhe = { path = "../lib/fhe-rs/crates/fhe" }
 fhe-traits = { path = "../lib/fhe-rs/crates/fhe-traits" }
 bincode = "*"
 rand = "0.8.5"
-rocket = "0.5.0"
+rocket = { version = "0.5.0", features = ["json"] }
