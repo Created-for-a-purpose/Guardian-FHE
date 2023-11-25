@@ -196,11 +196,34 @@ fn fhe_pay(fhe_wrapper: Json<FhePayWrapper>) -> Vec<u8>{
   serialized_fhe_pay_result
 }
 
+use rocket::http::Header;
+use rocket::{Request, Response};
+use rocket::fairing::{Fairing, Info, Kind};
+
+pub struct CORS;
+
+#[rocket::async_trait]
+impl Fairing for CORS {
+    fn info(&self) -> Info {
+        Info {
+            name: "Attaching CORS headers to responses",
+            kind: Kind::Response
+        }
+    }
+
+    async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
+        response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
+        response.set_header(Header::new("Access-Control-Allow-Methods", "POST, GET, PATCH, OPTIONS"));
+        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
+        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
+    }
+}
+
 #[launch]
 fn rocket() -> _ {
   env::set_var("RISC0_DEV_MODE", "1");
 
-  rocket::build().mount("/", routes![generate_key_pair, encrypt, decrypt, fhe_pay])
+  rocket::build().attach(CORS).mount("/", routes![generate_key_pair, encrypt, decrypt, fhe_pay])
 }
 
 // fn main() {
