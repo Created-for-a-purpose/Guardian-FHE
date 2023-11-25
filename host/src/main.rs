@@ -30,7 +30,7 @@ struct KeyPair{
 use rocket::serde::json::Json;
 
 #[get("/generateKeyPair")]
-fn generateKeyPair() -> String {
+fn generate_key_pair() -> String {
   let parameters = BfvParameters::default_arc(1, 8);
   let mut rng = thread_rng();
  
@@ -58,10 +58,10 @@ struct EncryptionWrapper {
   plaintext: u64
 }
 
-#[post("/encrypt", format="json", data="<public_key>")]
-fn encrypt(public_key: Json<EncryptionWrapper>) -> Vec<u8> {
-  let pkey = &public_key.key;
-  let plaintext = public_key.plaintext;
+#[post("/encrypt", format="json", data="<encryptionParams>")]
+fn encrypt(encryption_params: Json<EncryptionWrapper>) -> Vec<u8> {
+  let pkey = &encryption_params.key;
+  let plaintext = encryptionParams.plaintext;
 
   let parameters = BfvParameters::default_arc(1, 8);
   let mut rng = thread_rng();
@@ -85,37 +85,50 @@ fn encrypt(public_key: Json<EncryptionWrapper>) -> Vec<u8> {
   serialized_cipher
 }
 
-#[get("/decrypt")]
-fn decrypt() -> Vec<u8>{
+#[derive(rocket::serde::Serialize, rocket::serde::Deserialize)]
+#[serde(crate = "rocket::serde")]
+struct DecryptionWrapper {
+  key: Vec<u8>,
+  ciphertext: Vec<u8>
+}
+
+#[post("/decrypt", format="json", data="<decryptionParams>")]
+fn decrypt(decryption_params: Json<DecryptionWrapper>) -> Vec<u8>{
+  let secret_key_vec = &decryption_params.key;
+  let ciphertext_vec = &decryption_params.ciphertext;
+
   let parameters = BfvParameters::default_arc(1, 8);
 
+  /*@dev Read from a local file
   let mut file = File::open("skey.json").unwrap();
-    let mut ser_sk = String::new();
-    file.read_to_string(&mut ser_sk).unwrap();
-    let skey: Vec<u8>= serde_json::from_str(&ser_sk).unwrap();
-    let secret_key = SecretKey::from_bytes(&skey, &parameters).unwrap();
-
+  let mut ser_sk = String::new();
+  file.read_to_string(&mut ser_sk).unwrap();
+  let skey: Vec<u8>= serde_json::from_str(&ser_sk).unwrap();
+  */
+  
+  /*@dev Read from a local file
   file = File::open("cipher.json").unwrap();
-    let mut ser_c = String::new();
-    file.read_to_string(&mut ser_c).unwrap();
-    let ciph: Vec<u8>= serde_json::from_str(&ser_c).unwrap();
-    let ciphertext_1 = Ciphertext::from_bytes(&ciph, &parameters).unwrap();
+  let mut ser_c = String::new();
+  file.read_to_string(&mut ser_c).unwrap();
+  let ciph: Vec<u8>= serde_json::from_str(&ser_c).unwrap();
+  */
 
-    let decrypted_plaintext = SecretKey::try_decrypt(&secret_key, &ciphertext_1).unwrap();
-    let decrypted_vector = Vec::<i64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
+  let secret_key = SecretKey::from_bytes(&secret_key_vec, &parameters).unwrap();
+  let ciphertext = Ciphertext::from_bytes(&ciphertext_vec, &parameters).unwrap();
 
-    // Verify the result was correct
-    println!("decrypted_vector[0] {}", decrypted_vector[0]);
-    // bincode::serialize(&decrypted_vector).unwrap()
-    let serialized_r = serde_json::to_vec(&decrypted_vector).unwrap();
-    serialized_r
+  let decrypted_plaintext = SecretKey::try_decrypt(&secret_key, &ciphertext).unwrap();
+  let decrypted_vector = Vec::<i64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
+  println!("decrypted_result {}", decrypted_vector[0]);
+
+  let serialized_value = serde_json::to_vec(&decrypted_vector).unwrap();
+  serialized_value
 }
 
 #[launch]
 fn rocket() -> _ {
   env::set_var("RISC0_DEV_MODE", "1");
 
-  rocket::build().mount("/", routes![generateKeyPair, encrypt, decrypt])
+  rocket::build().mount("/", routes![generate_key_pair, encrypt, decrypt])
 }
 
 // fn main() {
