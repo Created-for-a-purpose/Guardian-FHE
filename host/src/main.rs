@@ -165,7 +165,7 @@ fn fhe_pay(fhe_wrapper: Json<FhePayWrapper>) -> Vec<u8>{
 
   let sender_cipher_balance = Ciphertext::from_bytes(&sender_cipher_balance, &parameters).unwrap();
   let receiver_cipher_balance = Ciphertext::from_bytes(&receiver_cipher_balance, &parameters).unwrap();
-
+  
   let plaintext_amount_encoded = Plaintext::try_encode(&[plaintext_amount], Encoding::poly(), &parameters).unwrap();
   let ciphertext_amount_sender = PublicKey::try_encrypt(&sender_public_key, &plaintext_amount_encoded, &mut rng).unwrap();
   let ciphertext_amount_receiver = PublicKey::try_encrypt(&receiver_public_key, &plaintext_amount_encoded, &mut rng).unwrap();
