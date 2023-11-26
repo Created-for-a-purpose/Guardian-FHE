@@ -8,7 +8,7 @@ use std::io::Read;
 use methods::{
     FHE_GUEST_ELF, FHE_GUEST_ID
 };
-use risc0_zkvm::{default_prover, ExecutorEnv};
+use risc0_zkvm::{default_prover, ExecutorEnv, Receipt, ReceiptMetadata};
 
 // FHE
 use fhe_traits::{FheDecoder, FheEncoder, FheEncrypter, FheDecrypter, Serialize, DeserializeParametrized};
@@ -191,6 +191,33 @@ fn fhe_pay(fhe_wrapper: Json<FhePayWrapper>) -> Vec<u8>{
   // Verify the receipt
   receipt.verify(FHE_GUEST_ID).unwrap();
 
+  if env::var("RISC0_DEV_MODE").unwrap() != "1" {
+    let metadata= receipt.get_metadata();
+    match metadata{
+      Ok(m) => {
+        let vec32 = risc0_zkvm::serde::to_vec(&m).unwrap();
+        let metadata_vecu8 = serde_json::to_vec(&vec32).unwrap();
+        let inner = receipt.inner;
+        let segment_receipt = inner.flat();
+        match segment_receipt{
+          Ok(sr) => {
+            let seal_bytes: Vec<u8> = sr[0].get_seal_bytes();
+            // Return seal bytes and receipt metadata
+            return [&seal_bytes[..], &metadata_vecu8[..]].concat();
+          }
+          Err(error) => {
+            println!("Error: {}", error);
+            return vec![];
+          }
+        }
+      }
+      Err(error) => {
+        println!("Error: {}", error);
+        return vec![];
+      }
+    };
+  }
+
   let fhe_pay_result: FhePayResult = bincode::deserialize(&result).unwrap();
   let serialized_fhe_pay_result = serde_json::to_vec(&fhe_pay_result).unwrap();
   serialized_fhe_pay_result
@@ -221,51 +248,9 @@ impl Fairing for CORS {
 
 #[launch]
 fn rocket() -> _ {
+  // env::set_var("BONSAI_API_KEY", "IXviFK2L345w82NBqy8rOwLVzMVWcKh5XdhhYmD7");
+  // env::set_var("BONSAI_API_URL", "https://api.bonsai.xyz/swagger-ui/");
   env::set_var("RISC0_DEV_MODE", "1");
 
   rocket::build().attach(CORS).mount("/", routes![generate_key_pair, encrypt, decrypt, fhe_pay])
 }
-
-// fn main() {
-//     env::set_var("RISC0_DEV_MODE", "1");
-
-//     let parameters = BfvParametersBuilder::new()
-//       .set_degree(2048)
-//       .set_moduli(&[0x3fffffff000001])
-//       .set_plaintext_modulus(1 << 10)
-//       .build_arc().unwrap();
-//     let mut rng = thread_rng();
-
-//     let secret_key = SecretKey::random(&parameters, &mut OsRng);
-//     let public_key = PublicKey::new(&secret_key, &mut rng);
-
-//     let plaintext_1 = Plaintext::try_encode(&[20_u64], Encoding::poly(), &parameters).unwrap();
-//     let plaintext_2 = Plaintext::try_encode(&[7_u64], Encoding::poly(), &parameters).unwrap();
-
-//     let ciphertext_1: Ciphertext = secret_key.try_encrypt(&plaintext_1, &mut rng).unwrap();
-//     let ciphertext_2: Ciphertext = public_key.try_encrypt(&plaintext_2, &mut rng).unwrap();
-
-//     let fhe_params = FheParam { ciphtxt1: ciphertext_1.to_bytes(), ciphtxt2: ciphertext_2.to_bytes() };
-
-//     let env = ExecutorEnv::builder()
-//       .write_slice(&bincode::serialize(&fhe_params).unwrap())
-//       .build().unwrap();
-
-//     // Obtain the default prover.
-//     let prover = default_prover();
-
-//     // Produce a receipt by proving the specified ELF binary.
-//     let receipt = prover.prove_elf(env, FHE_GUEST_ELF).unwrap();
-
-//     // Deserialize resulting ciphertext
-//     let result: Vec<u8> = receipt.journal.decode().unwrap();
-//     let ciph_out: Ciphertext = Ciphertext::from_bytes(&result, &parameters).unwrap();
-
-//     receipt.verify(FHE_GUEST_ID).unwrap();
-
-//     let decrypted_plaintext = secret_key.try_decrypt(&ciph_out).unwrap();
-//     let decrypted_vector = Vec::<i64>::try_decode(&decrypted_plaintext, Encoding::poly()).unwrap();
-
-//     // Verify the result was correct
-//     assert_eq!(decrypted_vector[0], 27);
-// }
